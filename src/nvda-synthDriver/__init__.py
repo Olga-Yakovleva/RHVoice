@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys
 import os.path
 try:
 	import Queue
@@ -23,8 +22,7 @@ except ImportError:
 	import queue as Queue
 from collections import OrderedDict,defaultdict
 import threading
-import ctypes
-from ctypes import c_char_p,c_wchar_p,c_void_p,c_short,c_int,c_uint,c_double,POINTER,Structure,sizeof,string_at,CFUNCTYPE,byref,cast
+from ctypes import c_char_p,c_short,sizeof,string_at,byref,cast
 import re
 import copy
 
@@ -32,6 +30,12 @@ try:
 	from io import StringIO
 except ImportError:
 	from StringIO import StringIO
+
+from RHVoice import RHVoice_tts_engine
+from RHVoice import RHVoice_init_params, RHVoice_callback_types, RHVoice_callbacks
+from RHVoice import RHVoice_synth_params
+from RHVoice import RHVoice_message_type, RHVoice_punctuation_mode, RHVoice_capitals_mode
+from RHVoice import load_tts_library, get_library_location
 
 import config
 import globalVars
@@ -55,7 +59,7 @@ try:
 	module_dir=os.path.dirname(__file__.decode("mbcs"))
 except AttributeError:
 	module_dir=os.path.dirname(__file__)
-lib_path=os.path.join(module_dir,"RHVoice.dll")
+RHVoice_lib_path=os.path.join(module_dir,"RHVoice.dll")
 config_path=os.path.join(globalVars.appArgs.configPath,"RHVoice-config")
 
 try:
@@ -90,115 +94,8 @@ nvda_notification_synthDoneSpeaking=nvda_notification_wrapper("synthDoneSpeaking
 
 data_addon_name_pattern=re.compile("^RHVoice-.*(voice|language).*")
 
-class RHVoice_tts_engine_struct(Structure):
-	pass
-RHVoice_tts_engine=POINTER(RHVoice_tts_engine_struct)
-
-class RHVoice_message_struct(Structure):
-	pass
-RHVoice_message=POINTER(RHVoice_message_struct)
-
-class RHVoice_callback_types:
-	set_sample_rate=CFUNCTYPE(c_int,c_int,c_void_p)
-	play_speech=CFUNCTYPE(c_int,POINTER(c_short),c_uint,c_void_p)
-	process_mark=CFUNCTYPE(c_int,c_char_p,c_void_p)
-	word_starts=CFUNCTYPE(c_int,c_uint,c_uint,c_void_p)
-	word_ends=CFUNCTYPE(c_int,c_uint,c_uint,c_void_p)
-	sentence_starts=CFUNCTYPE(c_int,c_uint,c_uint,c_void_p)
-	sentence_ends=CFUNCTYPE(c_int,c_uint,c_uint,c_void_p)
-	play_audio=CFUNCTYPE(c_int,c_char_p,c_void_p)
-	done=CFUNCTYPE(None,c_void_p)
-
-class RHVoice_callbacks(Structure):
-	_fields_=[("set_sample_rate",RHVoice_callback_types.set_sample_rate),
-				  ("play_speech",RHVoice_callback_types.play_speech),
-			  ("process_mark",RHVoice_callback_types.process_mark),
-			  ("word_starts",RHVoice_callback_types.word_starts),
-			  ("word_ends",RHVoice_callback_types.word_ends),
-			  ("sentence_starts",RHVoice_callback_types.sentence_starts),
-			  ("sentence_ends",RHVoice_callback_types.sentence_ends),
-			  ("play_audio",RHVoice_callback_types.play_audio),
-			  ("done",RHVoice_callback_types.done)]
-
-class RHVoice_init_params(Structure):
-	_fields_=[("data_path",c_char_p),
-			  ("config_path",c_char_p),
-			  ("resource_paths",POINTER(c_char_p)),
-			  ("callbacks",RHVoice_callbacks),
-			  ("options",c_uint)]
-
-class RHVoice_message_type:
-	text=0
-	ssml=1
-	characters=2
-
-class RHVoice_voice_gender:
-	unknown=0
-	male=1
-	female=2
-
-class RHVoice_voice_info(Structure):
-	_fields_=[("language",c_char_p),
-			  ("name",c_char_p),
-			  ("gender",c_int),
-			  ("country",c_char_p)]
-
-class RHVoice_punctuation_mode:
-	default=0
-	none=1
-	all=2
-	some=3
-
-class RHVoice_capitals_mode:
-	default=0
-	off=1
-	word=2
-	pitch=3
-	sound=4
-
 class RHVoice_synth_flag:
 	dont_clip_rate=1
-
-class RHVoice_synth_params(Structure):
-	_fields_=[("voice_profile",c_char_p),
-			  ("absolute_rate",c_double),
-			  ("absolute_pitch",c_double),
-			  ("absolute_volume",c_double),
-			  ("relative_rate",c_double),
-			  ("relative_pitch",c_double),
-			  ("relative_volume",c_double),
-			  ("punctuation_mode",c_int),
-			  ("punctuation_list",c_char_p),
-			  ("capitals_mode",c_int),
-			  ("flags",c_int)]
-
-def load_tts_library():
-	try:
-		lib=ctypes.CDLL(lib_path.encode("mbcs"))
-	except TypeError:
-		lib=ctypes.CDLL(lib_path)
-	lib.RHVoice_get_version.restype=c_char_p
-	lib.RHVoice_new_tts_engine.argtypes=(POINTER(RHVoice_init_params),)
-	lib.RHVoice_new_tts_engine.restype=RHVoice_tts_engine
-	lib.RHVoice_delete_tts_engine.argtypes=(RHVoice_tts_engine,)
-	lib.RHVoice_delete_tts_engine.restype=None
-	lib.RHVoice_get_number_of_voices.argtypes=(RHVoice_tts_engine,)
-	lib.RHVoice_get_number_of_voices.restype=c_uint
-	lib.RHVoice_get_voices.argtypes=(RHVoice_tts_engine,)
-	lib.RHVoice_get_voices.restype=POINTER(RHVoice_voice_info)
-	lib.RHVoice_get_number_of_voice_profiles.argtypes=(RHVoice_tts_engine,)
-	lib.RHVoice_get_number_of_voice_profiles.restype=c_uint
-	lib.RHVoice_get_voice_profiles.argtypes=(RHVoice_tts_engine,)
-	lib.RHVoice_get_voice_profiles.restype=POINTER(c_char_p)
-	lib.RHVoice_are_languages_compatible.argtypes=(RHVoice_tts_engine,c_char_p,c_char_p)
-	lib.RHVoice_are_languages_compatible.restype=c_int
-	lib.RHVoice_new_message.argtypes=(RHVoice_tts_engine,c_char_p,c_uint,c_int,POINTER(RHVoice_synth_params),c_void_p)
-	lib.RHVoice_new_message.restype=RHVoice_message
-	lib.RHVoice_delete_message.arg_types=(RHVoice_message,)
-	lib.RHVoice_delete_message.restype=None
-	lib.RHVoice_speak.argtypes=(RHVoice_message,)
-	lib.RHVoice_speak.restype=c_int
-	return lib
 
 def escape_text(text):
 	parts=list()
@@ -730,7 +627,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 
 	@classmethod
 	def check(cls):
-		return os.path.isfile(lib_path)
+                return os.path.isfile(get_library_location())
 
 	def __languages_match(self,code1,code2,full=True):
 		lang1=code1.split("_")
