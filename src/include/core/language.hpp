@@ -26,6 +26,7 @@
 #include "params.hpp"
 #include "exception.hpp"
 
+#include "api.h"
 #include "path.hpp"
 #include "resource.hpp"
 #include "value.hpp"
@@ -337,7 +338,7 @@ std::unique_ptr<fst> qst_fst;
   {
     friend class language_list;
   protected:
-    language_info(const std::string& name,const std::string& data_path,const std::string& userdict_path);
+    language_info(const std::string& name, const PathT& data_path, const PathT &userdict_path);
 
     void set_alpha2_code(const std::string& code)
     {
@@ -483,17 +484,17 @@ std::unique_ptr<fst> qst_fst;
       return *all_languages;
     }
 
-    std::vector<std::string> get_userdict_paths() const;
+    std::vector<PathT> get_userdict_paths() const;
 
   private:
     const language_list* all_languages;
-    std::string userdict_path;
+    PathT userdict_path;
   };
 
   class language_list: public resource_list<language_info>
   {
   public:
-    language_list(const std::vector<std::string>& language_paths,const std::string& userdict_path,const event_logger& logger);
+    language_list(const std::vector<PathT>& language_paths, const PathT &userdict_path, const event_logger& logger);
 
   private:
     class creator
@@ -507,7 +508,7 @@ std::unique_ptr<fst> qst_fst;
       {
       }
 
-      virtual std::shared_ptr<language_info> create(const std::string& data_path,const std::string& userdict_path) const=0;
+      virtual std::shared_ptr<language_info> create(const PathT& data_path,const PathT& userdict_path) const=0;
 
     private:
       creator(const creator&);
@@ -518,7 +519,7 @@ std::unique_ptr<fst> qst_fst;
     class concrete_creator: public creator
     {
     public:
-      std::shared_ptr<language_info> create(const std::string& data_path,const std::string& userdict_path) const
+      std::shared_ptr<language_info> create(const PathT& data_path,const PathT& userdict_path) const
       {
         return std::shared_ptr<language_info>(new T(data_path,userdict_path));
       }
@@ -536,7 +537,7 @@ std::unique_ptr<fst> qst_fst;
     Creators creators;
   };
 
-  class language_search_criteria: public std::unary_function<const language_info&,bool>
+  class RHVOICE_CORE_API language_search_criteria: public std::unary_function<const language_info&,bool>
   {
   public:
     void set_name(const std::string& name_)
