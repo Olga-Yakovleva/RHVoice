@@ -20,16 +20,14 @@
 #include "core/voice.hpp"
 #include "core/pitch.hpp"
 #include "HTS_engine.h"
+#include "HTS_hidden.h"
+
+#ifdef __WIN32
+#include <windows.h>
+#endif
 
 extern "C"
 {
-  void HTS_Audio_initialize(HTS_Audio * audio, int sampling_rate, int max_buff_size)
-  {
-  }
-
-  void HTS_Audio_set_parameter(HTS_Audio * audio, int sampling_rate, int max_buff_size)
-  {
-  }
 
   void HTS_Audio_write(HTS_Audio * audio, short sample)
   {
@@ -43,11 +41,6 @@ extern "C"
   void HTS_Audio_clear(HTS_Audio * audio)
   {
   }
-
-  size_t HTS_PStreamSet_get_total_frame(HTS_PStreamSet * pss);
-double HTS_PStreamSet_get_parameter(HTS_PStreamSet * pss, size_t stream_index, size_t frame_index, size_t vector_index);
-double *HTS_PStreamSet_get_parameter_vector(HTS_PStreamSet * pss, size_t stream_index, size_t frame_index);
-HTS_Boolean HTS_PStreamSet_get_msd_flag(HTS_PStreamSet * pss, size_t stream_index, size_t frame_index);
 }
 
 namespace RHVoice
@@ -67,14 +60,18 @@ namespace RHVoice
     engine.reset(new HTS_Engine);
     HTS_Engine_initialize(engine.get());
     engine->audio.audio_interface=this;
-    std::string voice_path(path::join(model_path,"voice.data"));
+    std::string voice_path;
+    {
+        PathT long_voice_path(path::join(model_path,"voice.data"));
+        voice_path = getShortPathIfNeeded(long_voice_path.data());
+    }
     char* c_voice_path=const_cast<char*>(voice_path.c_str());
     if(!HTS_Engine_load(engine.get(),&c_voice_path,1))
       {
         HTS_Engine_clear(engine.get());
         throw initialization_error();
       }
-    std::string bpf_path(path::join(model_path,"bpf.txt"));
+    PathT bpf_path(path::join(model_path,"bpf.txt"));
     if(bpf_load(&engine->bpf,bpf_path.c_str())==0)
       {
         HTS_Engine_clear(engine.get());
@@ -204,12 +201,7 @@ namespace RHVoice
 
   void std_hts_engine_impl::output_debug_info()
   {
-    if(const char* var=std::getenv("RHVOICE_DEBUG_HTS_INFO_FILE"))
-      {
-        io::file_handle fh(io::open_file(var, "wt"));
-        HTS_Engine_save_information(engine.get(), fh.get());
-      }
-    if(const char* var=std::getenv("RHVOICE_DEBUG_HTS_INFO_FILE"))
+    if(const PathT::value_type* var=ourPathGetenv("RHVOICE_DEBUG_HTS_INFO_FILE"))
       {
         io::file_handle fh(io::open_file(var, "wt"));
         HTS_Engine_save_information(engine.get(), fh.get());
